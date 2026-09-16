@@ -3407,6 +3407,14 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
+
+    width: "100%",
+
+    height: "100%",
+
+    overflow: "hidden",
+
+    backgroundColor: "#070C13",
   },
 
   map: {
@@ -3415,10 +3423,22 @@ const styles = StyleSheet.create({
 
   classBackground: {
     flex: 1,
+
+    width: "100%",
+
+    height: "100%",
+
+    overflow: "hidden",
   },
 
   battleBackground: {
     flex: 1,
+
+    width: "100%",
+
+    height: "100%",
+
+    overflow: "hidden",
   },
 
   backgroundOverlay: {
