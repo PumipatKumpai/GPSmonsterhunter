@@ -7,6 +7,7 @@ import {
   Image,
   ImageBackground,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,7 +15,7 @@ import {
   View,
 } from "react-native";
 
-import MapView, { Circle, Marker } from "../../components/MapComponents.web";
+import MapView, { Circle, Marker } from "../../components/MapComponents";
 
 // ======================================================
 // IMAGES
@@ -1335,6 +1336,38 @@ export default function HomeScreen() {
       [quest.id]: true,
     }));
 
+    const finishMission = () => {
+      if (result.leveledUp) {
+        setQuestVisible(false);
+
+        setTimeout(
+          () => {
+            setLevelUpVisible(true);
+          },
+
+          250,
+        );
+      }
+    };
+
+    if (Platform.OS === "web") {
+      finishMission();
+
+      setTimeout(
+        () => {
+          if (typeof window !== "undefined") {
+            window.alert(
+              `MISSION COMPLETE!\n\n${quest.title}\n\n+${quest.rewardExp} EXP`,
+            );
+          }
+        },
+
+        50,
+      );
+
+      return;
+    }
+
     Alert.alert(
       "MISSION COMPLETE",
 
@@ -1344,15 +1377,7 @@ export default function HomeScreen() {
         {
           text: "CONTINUE",
 
-          onPress: () => {
-            if (result.leveledUp) {
-              setQuestVisible(false);
-
-              setTimeout(() => {
-                setLevelUpVisible(true);
-              }, 250);
-            }
-          },
+          onPress: finishMission,
         },
       ],
     );
@@ -1367,33 +1392,56 @@ export default function HomeScreen() {
       return;
     }
 
-    setTimeout(() => {
-      Alert.alert(
-        "DEFEAT",
+    const monsterName = monster.name;
 
-        `${monster.name} defeated you.`,
+    const finishDefeat = () => {
+      setBattleStarted(false);
 
-        [
-          {
-            text: "RETURN TO MAP",
+      setSelectedMonster(false);
 
-            onPress: () => {
-              setBattleStarted(false);
+      setPlayerHP(playerMaxHP);
 
-              setPlayerHP(playerMaxHP);
+      setPlayerShield(playerMaxShield);
 
-              setPlayerShield(playerMaxShield);
+      setMonsterHP(monster.maxHp);
 
-              setMonsterHP(monster.maxHp);
+      resetBattleStates();
+    };
 
-              resetBattleStates();
+    setTimeout(
+      () => {
+        // WEB
+
+        if (Platform.OS === "web") {
+          finishDefeat();
+
+          if (typeof window !== "undefined") {
+            window.alert(`DEFEAT\n\n${monsterName} defeated you.`);
+          }
+
+          return;
+        }
+
+        // ANDROID / IOS
+
+        Alert.alert(
+          "DEFEAT",
+
+          `${monsterName} defeated you.`,
+
+          [
+            {
+              text: "RETURN TO MAP",
+
+              onPress: finishDefeat,
             },
-          },
-        ],
-      );
-    }, 100);
-  };
+          ],
+        );
+      },
 
+      100,
+    );
+  };
   // ====================================================
   // DAMAGE PLAYER
   // ====================================================
@@ -1622,46 +1670,90 @@ export default function HomeScreen() {
       return;
     }
 
-    recordMonsterDefeat(monster.id);
+    const defeatedMonster = monster;
 
-    const result = addPlayerExp(monster.exp);
+    recordMonsterDefeat(defeatedMonster.id);
+
+    const result = addPlayerExp(defeatedMonster.exp);
+
+    const finishVictory = () => {
+      // ออกจาก Battle ทันที
+      setBattleStarted(false);
+
+      setSelectedMonster(false);
+
+      resetBattleStates();
+
+      // ฟื้น Player
+      setPlayerHP(
+        getBasePlayerMaxHP(
+          result.currentLevel,
+
+          activeClass,
+        ) + equipmentBonuses.hp,
+      );
+
+      setPlayerShield(
+        getBasePlayerShield(
+          result.currentLevel,
+
+          activeClass,
+        ) + equipmentBonuses.shield,
+      );
+
+      // สร้าง Monster ตัวต่อไป
+      if (playerLocation) {
+        createMonster(playerLocation);
+      }
+
+      // Level Up
+      if (result.leveledUp) {
+        setTimeout(
+          () => {
+            setLevelUpVisible(true);
+          },
+
+          250,
+        );
+      }
+    };
+
+    // ==================================================
+    // WEB
+    // ==================================================
+
+    if (Platform.OS === "web") {
+      finishVictory();
+
+      setTimeout(
+        () => {
+          if (typeof window !== "undefined") {
+            window.alert(
+              `VICTORY!\n\n${defeatedMonster.name} DEFEATED!\n\n+${defeatedMonster.exp} EXP`,
+            );
+          }
+        },
+
+        50,
+      );
+
+      return;
+    }
+
+    // ==================================================
+    // ANDROID / IOS
+    // ==================================================
 
     Alert.alert(
       "VICTORY",
 
-      `${monster.name} DEFEATED!\n\n+${monster.exp} EXP`,
+      `${defeatedMonster.name} DEFEATED!\n\n+${defeatedMonster.exp} EXP`,
 
       [
         {
           text: "CONTINUE HUNT",
 
-          onPress: () => {
-            setBattleStarted(false);
-
-            setSelectedMonster(false);
-
-            resetBattleStates();
-
-            setPlayerHP(
-              getBasePlayerMaxHP(result.currentLevel, activeClass) +
-                equipmentBonuses.hp,
-            );
-
-            setPlayerShield(
-              getBasePlayerShield(result.currentLevel, activeClass) +
-                equipmentBonuses.shield,
-            );
-
-            if (result.leveledUp) {
-              setTimeout(() => {
-                setLevelUpVisible(true);
-              }, 250);
-            }
-
-            if (playerLocation) {
-              createMonster(playerLocation);
-            }
-          },
+          onPress: finishVictory,
         },
       ],
     );

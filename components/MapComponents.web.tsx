@@ -1,15 +1,29 @@
-import React, { forwardRef, useImperativeHandle } from "react";
+import React, {
+    createContext,
+    forwardRef,
+    useContext,
+    useImperativeHandle,
+    useMemo,
+    useState,
+} from "react";
 
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, TouchableOpacity, View } from "react-native";
 
 // ======================================================
-// WEB MAP FALLBACK
+// TYPES
 // ======================================================
+
+type Region = {
+  latitude: number;
+  longitude: number;
+  latitudeDelta: number;
+  longitudeDelta: number;
+};
 
 type MapProps = {
   children?: React.ReactNode;
   style?: any;
-  initialRegion?: any;
+  initialRegion?: Region;
   showsCompass?: boolean;
   showsBuildings?: boolean;
 };
@@ -32,68 +46,164 @@ type CircleProps = {
   };
 
   radius?: number;
+
   strokeWidth?: number;
+
   strokeColor?: string;
+
   fillColor?: string;
 };
 
 // ======================================================
-// MAP
+// DEFAULT REGION
 // ======================================================
 
-const MapView = forwardRef<any, MapProps>(({ children, style }, ref) => {
-  useImperativeHandle(ref, () => ({
-    animateToRegion: () => {
-      // Native map animation is not required on web.
+const DEFAULT_REGION: Region = {
+  latitude: 13.7563,
+  longitude: 100.5018,
+
+  latitudeDelta: 0.01,
+  longitudeDelta: 0.01,
+};
+
+// ======================================================
+// MAP CONTEXT
+// ======================================================
+
+const MapRegionContext = createContext<Region>(DEFAULT_REGION);
+
+// ======================================================
+// POSITION CALCULATION
+// ======================================================
+
+const coordinateToPercent = (
+  coordinate: {
+    latitude: number;
+    longitude: number;
+  },
+
+  region: Region,
+) => {
+  const west = region.longitude - region.longitudeDelta / 2;
+
+  const north = region.latitude + region.latitudeDelta / 2;
+
+  const left = ((coordinate.longitude - west) / region.longitudeDelta) * 100;
+
+  const top = ((north - coordinate.latitude) / region.latitudeDelta) * 100;
+
+  return {
+    left,
+    top,
+  };
+};
+
+// ======================================================
+// WEB MAP
+// ======================================================
+
+const MapView = forwardRef<any, MapProps>(
+  (
+    {
+      children,
+
+      style,
+
+      initialRegion = DEFAULT_REGION,
     },
-  }));
 
-  return (
-    <View style={[styles.map, style]}>
-      {/* MAP BACKGROUND */}
+    ref,
+  ) => {
+    const [region, setRegion] = useState<Region>(initialRegion);
 
-      <View style={styles.mapBackground} />
+    // ==================================================
+    // SUPPORT animateToRegion()
+    // ==================================================
 
-      {/* ROADS */}
+    useImperativeHandle(
+      ref,
 
-      <View style={styles.roadHorizontal} />
+      () => ({
+        animateToRegion: (nextRegion: Partial<Region>) => {
+          setRegion((previous) => ({
+            ...previous,
 
-      <View style={styles.roadVertical} />
+            ...nextRegion,
 
-      <View style={styles.roadDiagonal} />
+            latitudeDelta: nextRegion.latitudeDelta ?? previous.latitudeDelta,
 
-      {/* DECORATION */}
+            longitudeDelta:
+              nextRegion.longitudeDelta ?? previous.longitudeDelta,
+          }));
+        },
+      }),
+    );
 
-      <View
-        style={[
-          styles.greenArea,
-          {
-            top: "13%",
-            left: "8%",
-          },
-        ]}
-      />
+    // ==================================================
+    // OPENSTREETMAP
+    // ==================================================
 
-      <View
-        style={[
-          styles.greenArea,
-          {
-            bottom: "12%",
-            right: "9%",
-          },
-        ]}
-      />
+    const mapURL = useMemo(() => {
+      const west = region.longitude - region.longitudeDelta / 2;
 
-      <View style={styles.mapLabel}>
-        <Text style={styles.mapLabelTitle}>GPS MONSTER HUNTER</Text>
+      const east = region.longitude + region.longitudeDelta / 2;
 
-        <Text style={styles.mapLabelSub}>WEB MAP PREVIEW</Text>
+      const south = region.latitude - region.latitudeDelta / 2;
+
+      const north = region.latitude + region.latitudeDelta / 2;
+
+      const bbox = `${west},${south},${east},${north}`;
+
+      return (
+        "https://www.openstreetmap.org/export/embed.html" +
+        `?bbox=${encodeURIComponent(bbox)}` +
+        "&layer=mapnik"
+      );
+    }, [region]);
+
+    const iframe = React.createElement(
+      "iframe",
+
+      {
+        src: mapURL,
+
+        title: "GPS Monster Hunter Map",
+
+        loading: "lazy",
+
+        style: {
+          width: "100%",
+
+          height: "100%",
+
+          border: "0",
+
+          display: "block",
+
+          pointerEvents: "none",
+        },
+      },
+    );
+
+    return (
+      <View style={[styles.map, style]}>
+        {/* REAL WEB MAP */}
+
+        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+          {iframe}
+        </View>
+
+        {/* GAME OBJECTS */}
+
+        <MapRegionContext.Provider value={region}>
+          <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+            {children}
+          </View>
+        </MapRegionContext.Provider>
       </View>
-
-      {children}
-    </View>
-  );
-});
+    );
+  },
+);
 
 MapView.displayName = "WebMapView";
 
@@ -101,19 +211,20 @@ MapView.displayName = "WebMapView";
 // MARKER
 // ======================================================
 
-export function Marker({ coordinate, children, onPress }: MarkerProps) {
-  /*
-    สร้างตำแหน่งจำลองจาก Coordinate
-    เพื่อให้ Player / Monster ไม่ทับกันบน Web
-  */
+export function Marker({
+  coordinate,
 
-  const xSeed = Math.abs(Math.floor(coordinate.longitude * 1000000)) % 55;
+  children,
 
-  const ySeed = Math.abs(Math.floor(coordinate.latitude * 1000000)) % 45;
+  onPress,
+}: MarkerProps) {
+  const region = useContext(MapRegionContext);
 
-  const left = 20 + xSeed;
+  const position = coordinateToPercent(
+    coordinate,
 
-  const top = 24 + ySeed;
+    region,
+  );
 
   return (
     <TouchableOpacity
@@ -121,9 +232,11 @@ export function Marker({ coordinate, children, onPress }: MarkerProps) {
       onPress={onPress}
       style={[
         styles.marker,
+
         {
-          left: `${left}%`,
-          top: `${top}%`,
+          left: `${position.left}%`,
+
+          top: `${position.top}%`,
         },
       ]}
     >
@@ -137,18 +250,58 @@ export function Marker({ coordinate, children, onPress }: MarkerProps) {
 // ======================================================
 
 export function Circle({
+  center,
+
+  radius = 10,
+
   strokeWidth = 2,
+
   strokeColor = "rgba(36,111,255,0.65)",
+
   fillColor = "rgba(36,111,255,0.10)",
 }: CircleProps) {
+  const region = useContext(MapRegionContext);
+
+  const position = coordinateToPercent(
+    center,
+
+    region,
+  );
+
+  const metersPerLatitudeDegree = 111320;
+
+  const metersPerLongitudeDegree =
+    111320 * Math.cos((center.latitude * Math.PI) / 180);
+
+  const heightPercent =
+    ((radius * 2) / (region.latitudeDelta * metersPerLatitudeDegree)) * 100;
+
+  const widthPercent =
+    ((radius * 2) / (region.longitudeDelta * metersPerLongitudeDegree)) * 100;
+
+  const left = position.left - widthPercent / 2;
+
+  const top = position.top - heightPercent / 2;
+
   return (
     <View
       pointerEvents="none"
       style={[
         styles.circle,
+
         {
+          left: `${left}%`,
+
+          top: `${top}%`,
+
+          width: `${widthPercent}%`,
+
+          height: `${heightPercent}%`,
+
           borderWidth: strokeWidth,
+
           borderColor: strokeColor,
+
           backgroundColor: fillColor,
         },
       ]}
@@ -173,122 +326,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#DDE8DA",
   },
 
-  mapBackground: {
-    ...StyleSheet.absoluteFillObject,
-
-    backgroundColor: "#DDE8DA",
-  },
-
-  roadHorizontal: {
-    position: "absolute",
-
-    left: "-5%",
-
-    right: "-5%",
-
-    top: "46%",
-
-    height: 55,
-
-    backgroundColor: "#F7F4EC",
-
-    borderTopWidth: 2,
-
-    borderBottomWidth: 2,
-
-    borderColor: "#DDD8CC",
-  },
-
-  roadVertical: {
-    position: "absolute",
-
-    top: "-5%",
-
-    bottom: "-5%",
-
-    left: "48%",
-
-    width: 55,
-
-    backgroundColor: "#F7F4EC",
-
-    borderLeftWidth: 2,
-
-    borderRightWidth: 2,
-
-    borderColor: "#DDD8CC",
-  },
-
-  roadDiagonal: {
-    position: "absolute",
-
-    width: "150%",
-
-    height: 34,
-
-    left: "-20%",
-
-    top: "68%",
-
-    backgroundColor: "#F4F1E9",
-
-    transform: [
-      {
-        rotate: "-12deg",
-      },
-    ],
-  },
-
-  greenArea: {
-    position: "absolute",
-
-    width: 150,
-
-    height: 115,
-
-    borderRadius: 30,
-
-    backgroundColor: "#BFD7B4",
-  },
-
-  mapLabel: {
-    position: "absolute",
-
-    top: 150,
-
-    left: 15,
-
-    backgroundColor: "rgba(255,255,255,0.93)",
-
-    paddingHorizontal: 12,
-
-    paddingVertical: 8,
-
-    borderRadius: 12,
-  },
-
-  mapLabelTitle: {
-    color: "#111722",
-
-    fontSize: 11,
-
-    fontWeight: "900",
-  },
-
-  mapLabelSub: {
-    color: "#697480",
-
-    fontSize: 9,
-
-    fontWeight: "800",
-
-    marginTop: 2,
-  },
-
   marker: {
     position: "absolute",
 
-    zIndex: 10,
+    zIndex: 20,
 
     transform: [
       {
@@ -304,20 +345,8 @@ const styles = StyleSheet.create({
   circle: {
     position: "absolute",
 
-    width: 110,
+    borderRadius: 9999,
 
-    height: 110,
-
-    borderRadius: 55,
-
-    left: "50%",
-
-    top: "50%",
-
-    marginLeft: -55,
-
-    marginTop: -55,
-
-    zIndex: 2,
+    zIndex: 10,
   },
 });
