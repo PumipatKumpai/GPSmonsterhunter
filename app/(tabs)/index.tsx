@@ -14,7 +14,7 @@ import {
   View,
 } from "react-native";
 
-import MapView, { Circle, Marker } from "react-native-maps";
+import MapView, { Circle, Marker } from "../../components/MapComponents.web";
 
 // ======================================================
 // IMAGES
@@ -894,7 +894,7 @@ export default function HomeScreen() {
 
   const expPercentage = Math.min((exp / requiredExp) * 100, 100);
 
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<any>(null);
 
   // ====================================================
   // COLLECTION DATA
