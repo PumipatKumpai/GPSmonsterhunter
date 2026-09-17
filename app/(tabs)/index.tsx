@@ -1,5 +1,5 @@
 import * as Location from "expo-location";
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ImageSourcePropType } from "react-native";
 
 import {
@@ -3534,12 +3534,12 @@ const styles = StyleSheet.create({
   },
 
   backgroundOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(7,12,19,0.82)",
   },
 
   battleOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(6,10,16,0.88)",
   },
 
